@@ -1,6 +1,6 @@
 from fastapi import UploadFile, HTTPException
 from app.schemas.classify import ClassificationResponse
-from app.models.model_loader import model
+from app.classification_models.model_loader import model
 from app.services.preprocess import load_and_preprocess_image
 from tensorflow.keras.applications.efficientnet import preprocess_input
 import numpy as np

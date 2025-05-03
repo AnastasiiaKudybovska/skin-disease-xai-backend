@@ -1,5 +1,5 @@
 from fastapi import UploadFile
-from app.models.model_loader import model
+from app.classification_models.model_loader import model
 from app.services.preprocess import load_and_preprocess_image
 from tensorflow.keras.applications.efficientnet import preprocess_input
 from app.xai.gradcam import generate_gradcam_for_image

@@ -1,6 +1,7 @@
 import uvicorn
 from fastapi import FastAPI
 from app.routes import classify, xai
+from app.auth.routes import auth, user
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import origins
 
@@ -17,6 +18,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.auth_router, prefix="/api/auth", tags=["Auth"])
+app.include_router(user.user_router, prefix="/api/users", tags=["Users"])
 app.include_router(classify.router, prefix="/api/classify", tags=["Classification"])
 app.include_router(xai.router, prefix="/api/xai", tags=["XAI"])
 
