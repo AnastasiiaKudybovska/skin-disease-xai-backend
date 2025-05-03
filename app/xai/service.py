@@ -1,11 +1,10 @@
 from fastapi import UploadFile
-from app.models.model_loader import model
-from app.services.preprocess import load_and_preprocess_image
+from app.classification_models.model_loader import model
+from app.constants import CLASS_LABELS
+from app.utils.preprocess_image import load_and_preprocess_image
 from tensorflow.keras.applications.efficientnet import preprocess_input
 from app.xai.gradcam import generate_gradcam_for_image
 import numpy as np
-
-class_labels = ['nv', 'mel', 'bkl', 'bcc', 'akiec', 'vasc', 'df']
 
 async def explain_image_with_gradcam(file: UploadFile):
     # Зчитування і підготовка зображення
@@ -19,7 +18,7 @@ async def explain_image_with_gradcam(file: UploadFile):
     )
 
     return {
-        "predicted_class": class_labels[int(pred_class)],
+        "predicted_class": CLASS_LABELS[int(pred_class)],
         "predicted_probs": probs[0].tolist(),
         # "heatmap": heatmap,
         "overlay": overlay,
