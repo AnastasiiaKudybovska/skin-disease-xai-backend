@@ -1,18 +1,18 @@
 from fastapi import APIRouter, UploadFile, File
 from fastapi.responses import JSONResponse
-from app.schemas.xai import GradCAMResponse
-from app.services.xai_service import explain_image_with_gradcam
+from app.xai.schemas import GradCAMResponse
+from app.xai.service import explain_image_with_gradcam
 import numpy as np
 import base64
 import cv2
 
-router = APIRouter()
+xai_router = APIRouter()
 
 def encode_image_to_base64(image: np.ndarray) -> str:
     _, buffer = cv2.imencode(".png", image)
     return base64.b64encode(buffer).decode("utf-8")
 
-@router.post("/gradcam", response_model=GradCAMResponse)
+@xai_router.post("/gradcam", response_model=GradCAMResponse)
 async def gradcam_explanation(file: UploadFile = File(...)):
     try:
         result = await explain_image_with_gradcam(file)

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from app.auth.schemas import UserResponse
 from app.db.mongo import get_mongo_db
 
@@ -10,11 +10,16 @@ def get_user(email: str):
     user_doc = db.users.find_one({"email": email})
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
-    return {
-        "id": str(user_doc["_id"]),
-        "email": user_doc["email"],
-        "age": user_doc["age"]
-    }
+
+    return UserResponse(
+        id=str(user_doc["_id"]),
+        first_name=user_doc["first_name"],
+        last_name=user_doc["last_name"],
+        email=user_doc["email"],
+        username=user_doc["username"],
+        date_of_birth=user_doc["date_of_birth"]
+    )
+
 
 @user_router.delete("/{email}")
 def delete_user(email: str):
