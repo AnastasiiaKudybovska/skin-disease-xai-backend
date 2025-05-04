@@ -42,8 +42,7 @@ async def classify_image(
             "predicted_class": result.predicted_class,
             "confidence": result.confidence,
             "probabilities": result.probabilities,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "xai": [] 
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
 
     return result

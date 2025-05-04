@@ -7,4 +7,3 @@ class Histrory:
     confidence: float
     probabilities: Dict[str, float]
     timestamp: str
-    xai: List[str]
