@@ -1,10 +1,12 @@
 from fastapi import APIRouter, UploadFile, File, Depends, Form
 from fastapi.responses import JSONResponse
+from gridfs import GridFS
 from app.auth.dependencies import get_current_user_optional
 from app.db.mongo import get_mongo_db
+from app.utils.history_cleanup import delete_all_images
 from app.utils.saving_images import get_image_from_gridfs, save_image_to_gridfs, encode_image_to_base64
 from app.utils.exceptions import user_history_not_found_exception, invalid_image_id_exception, image_not_found_exception
-from app.xai.models import Explanation
+from app.xai.models import Explanation, ExplanationItem
 from app.xai.schemas import GradCAMResponse
 from app.xai.service import explain_image_with_gradcam
 import cv2
@@ -26,41 +28,76 @@ async def gradcam_explanation(
     result = await explain_image_with_gradcam(file)
 
     overlay_bgr = cv2.cvtColor(result["overlay"], cv2.COLOR_RGB2BGR)
-    image_id = None
-    overlay_image = None
-        
+    explanations = []
+
     if user:
-        filename = f"gradcam_{file.filename}_{history_id}"
-        image_id = save_image_to_gridfs(db, overlay_bgr, filename)
-        explanation_doc = {
-            "method": "gradcam",
-            "overlay_image_id": image_id,
-        }
-        if history_id:
-            explanation_doc["history_id"] = ObjectId(history_id)
-        else:
+        if not history_id:
             raise user_history_not_found_exception
 
-        db.explanations.insert_one(explanation_doc)
-        overlay_image = image_id
+        filename = f"gradcam_{file.filename}_{history_id}"
+        image_id = save_image_to_gridfs(db, overlay_bgr, filename)
+        
+        explanation_item = ExplanationItem(
+            method="gradcam",
+            overlay_image_id=str(image_id)
+        )
+
+        existing = db.explanations.find_one({
+            "history_id": ObjectId(history_id),
+            "explanations.method": "gradcam"
+        })
+        if existing:
+            gradcam_item = next(
+                (e for e in existing["explanations"] if e["method"] == "gradcam"),
+                 None
+            )     
+            if gradcam_item:
+                old_image_id = gradcam_item.get("overlay_image_id")
+                if old_image_id:
+                    try:
+                        db.fs.files.delete_one({"_id": ObjectId(old_image_id)})
+                        db.fs.chunks.delete_many({"files_id": ObjectId(old_image_id)})
+                    except Exception as e:
+                        raise invalid_image_id_exception
+
+            db.explanations.update_one(
+                {"history_id": ObjectId(history_id)},
+                {
+                    "$set": {
+                        "explanations.$[elem].overlay_image_id": image_id
+                    }
+                },
+                array_filters=[{"elem.method": "gradcam"}]
+            )
+        else:
+            db.explanations.update_one(
+                {"history_id": ObjectId(history_id)},
+                {"$push": {"explanations": asdict(explanation_item)}},
+                upsert=True
+            )
+        
+        explanations.append(explanation_item)
     else:
         overlay_base64 = encode_image_to_base64(result["overlay"]) 
-        overlay_image = overlay_base64
 
-    explanation = Explanation(
-        method="gradcam",
-        overlay_image_id=overlay_image,
-        history_id=history_id if history_id else None
+        explanation_item = ExplanationItem(
+            method="gradcam",
+            overlay_image_id=overlay_base64
+        )
+        explanations.append(explanation_item)
+
+    explanation_response = Explanation(
+        history_id=history_id,
+        explanations=explanations
     )
-    
     return GradCAMResponse(
         predicted_class=result["predicted_class"],
         predicted_probs=result["predicted_probs"],
-        explanations=[asdict(explanation)],
+        explanations=[asdict(explanation_response)]
     )
 
 
-@xai_router.get("/get_image/{image_id}")
+@xai_router.get("/images/{image_id}")
 async def get_image(image_id: str, db: Database = Depends(get_mongo_db)):
     try:
         object_id = ObjectId(image_id)
@@ -71,3 +108,28 @@ async def get_image(image_id: str, db: Database = Depends(get_mongo_db)):
         return get_image_from_gridfs(db, image_id)
     except Exception:
         raise image_not_found_exception
+    
+
+@xai_router.get("/images/all_images")
+async def list_all_images(db: Database = Depends(get_mongo_db)):
+    fs = GridFS(db)
+    files = fs.find()
+    result = []
+
+    for file in files:
+        result.append({
+            "filename": file.filename,
+            "file_id": str(file._id),
+            "upload_date": file.upload_date.isoformat() 
+        })
+
+    return JSONResponse(content=result)
+
+
+@xai_router.delete("/images/delete_all_images")
+async def delete_all_images_endpoint(db: Database = Depends(get_mongo_db)):
+    try:
+        delete_all_images(db)
+        return JSONResponse(content={"message": "All images have been deleted successfully."})
+    except Exception as e:
+        return JSONResponse(content={"message": str(e)}, status_code=400)

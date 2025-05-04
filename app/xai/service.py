@@ -3,7 +3,7 @@ from app.classification_models.model_loader import model
 from app.constants import CLASS_LABELS
 from app.utils.preprocess_image import load_and_preprocess_image
 from tensorflow.keras.applications.efficientnet import preprocess_input
-from app.xai.gradcam import generate_gradcam_for_image
+from app.xai.methods.gradcam import generate_gradcam_for_image
 import numpy as np
 
 async def explain_image_with_gradcam(file: UploadFile):
