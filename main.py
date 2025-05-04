@@ -24,5 +24,6 @@ app.include_router(user.user_router, prefix="/api/users", tags=["Users"])
 app.include_router(classify_router, prefix="/api/classify", tags=["Classification"])
 app.include_router(xai_router, prefix="/api/xai", tags=["XAI"])
 
+
 if __name__ == '__main__':
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

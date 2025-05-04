@@ -9,9 +9,8 @@ import numpy as np
 async def explain_image_with_gradcam(file: UploadFile):
     # Зчитування і підготовка зображення
     image_data = await file.read()
-    image_np = load_and_preprocess_image(image_data)  # повертає [224, 224, 3]
-    image_np = preprocess_input(image_np)             # EfficientNet нормалізація
-
+    image_np = load_and_preprocess_image(image_data)
+    image_np = preprocess_input(image_np)
     # Отримання GradCAM
     pred_class, heatmap, overlay, masked_output, probs = generate_gradcam_for_image(
         image_np, model, layer_name="conv5_block3_3_conv"

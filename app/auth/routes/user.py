@@ -12,7 +12,7 @@ user_router = APIRouter()
 
 
 @user_router.get("/", response_model=UserBase)
-def profile(user: UserResponse = Depends(get_current_user)):
+def get_profile(user: UserResponse = Depends(get_current_user)):
     return UserBase(
         first_name=user["first_name"],
         last_name=user["last_name"],
