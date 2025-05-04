@@ -1,6 +1,6 @@
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends
 from app.classification.service import classify_image
-from app.classification.schemas import ClassificationHistoryResponse, ClassificationResponse
+from app.classification.schemas import ClassificationHistoryResponse, ClassificationWithHistoryResponse
 from app.db.mongo import get_mongo_db
 from app.auth.dependencies import get_current_user, get_current_user_optional
 from pymongo.database import Database
@@ -8,11 +8,12 @@ from typing import Optional, List
 from bson import ObjectId
 from app.utils.getters_services import get_histories_by_user_id
 from app.utils.exceptions import user_history_not_found_exception, invalid_history_id_exception
+from app.utils.history_cleanup import delete_history_with_related
 
 classify_router = APIRouter()
 
 
-@classify_router.post("/", response_model=ClassificationResponse)
+@classify_router.post("/", response_model=ClassificationWithHistoryResponse)
 async def skin_classification(
     file: UploadFile = File(...),
     db: Database = Depends(get_mongo_db),
@@ -50,24 +51,27 @@ async def delete_history(
     except Exception:
         raise invalid_history_id_exception
 
-    result = db.histories.delete_one({
+    history = db.histories.find_one({
         "_id": object_id,
         "user_id": ObjectId(user["_id"])
     })
 
-    if result.deleted_count == 0:
+    if not history:
         raise user_history_not_found_exception
-    
-    return {"message": "User history deleted"}
 
+    delete_history_with_related(db, object_id)
+    return {"message": "User history and related images deleted"}
+    
 
 @classify_router.delete("/histories")
 async def delete_all_histories(
     db: Database = Depends(get_mongo_db),
     user: dict = Depends(get_current_user)
 ):
-    result = db.histories.delete_many({
-        "user_id": ObjectId(user["_id"])
-    })
+    user_id = ObjectId(user["_id"])
+    histories = db.histories.find({"user_id": user_id})
+    
+    for history in histories:
+        delete_history_with_related(db, history["_id"])
 
-    return {"message": f"Deleted {result.deleted_count} history record(s)"}
+    return {"message": "All user histories and related explanations/images deleted"}

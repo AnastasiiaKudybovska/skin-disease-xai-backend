@@ -1,5 +1,5 @@
 from fastapi import UploadFile, HTTPException, status
-from app.classification.schemas import ClassificationResponse
+from app.classification.schemas import ClassificationResponse, ClassificationWithHistoryResponse
 from app.classification_models.model_loader import model
 from app.constants import CLASS_LABELS, MIN_CONFIDENCE_THRESHOLD
 from app.utils.preprocess_image import load_and_preprocess_image
@@ -14,7 +14,7 @@ async def classify_image(
     file: UploadFile,
     db: Database,
     user: Optional[dict] = None
-) -> ClassificationResponse:
+) -> ClassificationWithHistoryResponse:
     image_np = load_and_preprocess_image(await file.read())
     image_np = np.expand_dims(image_np, axis=0)
     image_np = preprocess_input(image_np)
@@ -34,15 +34,18 @@ async def classify_image(
         predicted_class=CLASS_LABELS[pred_class_idx],
         confidence=confidence,
         probabilities=probabilities
+        
     )
-
+    
+    history_id = None
     if user:
-        db.histories.insert_one({
+        inserted = db.histories.insert_one({
             "user_id": ObjectId(user["_id"]),
             "predicted_class": result.predicted_class,
             "confidence": result.confidence,
             "probabilities": result.probabilities,
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
+        history_id = str(inserted.inserted_id)
 
-    return result
+    return ClassificationWithHistoryResponse(**result.model_dump(), history_id=history_id)
