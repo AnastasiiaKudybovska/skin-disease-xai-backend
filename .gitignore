@@ -3,3 +3,4 @@
 **/*.py[cod]
 *.h5
 /venv310
+/app/.env
