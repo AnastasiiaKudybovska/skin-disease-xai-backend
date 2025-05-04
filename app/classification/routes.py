@@ -13,7 +13,7 @@ classify_router = APIRouter()
 
 
 @classify_router.post("/", response_model=ClassificationResponse)
-async def classify_image(
+async def skin_classification(
     file: UploadFile = File(...),
     db: Database = Depends(get_mongo_db),
     user: Optional[dict] = Depends(get_current_user_optional)
@@ -59,3 +59,15 @@ async def delete_history(
         raise user_history_not_found_exception
     
     return {"message": "User history deleted"}
+
+
+@classify_router.delete("/histories")
+async def delete_all_histories(
+    db: Database = Depends(get_mongo_db),
+    user: dict = Depends(get_current_user)
+):
+    result = db.histories.delete_many({
+        "user_id": ObjectId(user["_id"])
+    })
+
+    return {"message": f"Deleted {result.deleted_count} history record(s)"}
