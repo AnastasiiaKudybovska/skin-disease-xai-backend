@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from app.auth.hashing import hash_password, verify_password
 from app.auth.models import User
 from app.auth.schemas import UserCreate, UserLogin, UserResponse, UserLoginResponse
+from app.auth.dependencies import get_current_user
 from app.auth.service import update_user_tokens
 from app.db.mongo import get_mongo_db
 from bson import ObjectId
@@ -14,7 +15,7 @@ from app.utils.exceptions import (
     invalid_token_exception,
     user_not_found_exception
 )
-from app.utils.jwt_handlers import create_access_token, create_refresh_token, decode_access_token
+from app.utils.jwt_handlers import create_access_token, create_refresh_token
 
 auth_router = APIRouter()
 
@@ -76,20 +77,16 @@ def sign_in(user: UserLogin):
 
 
 @auth_router.patch("/logout")
-def logout(token: dict = Depends(decode_access_token)):
-    db = get_mongo_db()
-    if not token:
+async def logout(
+    current_user: dict = Depends(get_current_user),
+    db = Depends(get_mongo_db)
+):
+    try:
+        db.users.update_one(
+            {"_id": ObjectId(current_user["_id"])},
+            {"$set": {"access_token": None, "refresh_token": None}}
+        )
+        return {"message": "User logged out successfully"}
+    except Exception as e:
         raise invalid_token_exception
-
-    user_id = token.get("sub")
-    user = get_user_by_id(db, user_id)
-
-    if not user:
-        raise user_not_found_exception
-
-    db.users.update_one(
-        {"_id": ObjectId(user_id)},
-        {"$set": {"access_token": None, "refresh_token": None}}
-    )
-
-    return {"message": "User logged out"}
+    

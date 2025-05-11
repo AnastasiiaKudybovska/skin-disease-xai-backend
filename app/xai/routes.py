@@ -3,12 +3,16 @@ from fastapi.responses import JSONResponse
 from gridfs import GridFS
 from app.auth.dependencies import get_current_user_optional
 from app.db.mongo import get_mongo_db
+from app.utils.getters_services import get_image_from_gridfs
 from app.utils.history_cleanup import delete_all_images
-from app.utils.saving_images import get_image_from_gridfs, save_image_to_gridfs, encode_image_to_base64
-from app.utils.exceptions import user_history_not_found_exception, invalid_image_id_exception, image_not_found_exception
+from app.utils.exceptions import (
+    invalid_image_id_exception, 
+    image_not_found_exception,
+    invalid_lime_image_exception
+)
 from app.xai.models import Explanation, ExplanationItem
-from app.xai.schemas import GradCAMResponse
-from app.xai.service import explain_image_with_gradcam
+from app.xai.schemas import XAIResponse
+from app.xai.service import explain_image_with_gradcam, explain_image_with_lime, handle_authenticated_user, handle_unknown_user
 import cv2
 from typing import Optional
 from pymongo.database import Database
@@ -18,7 +22,7 @@ from dataclasses import asdict
 xai_router = APIRouter()
 
 
-@xai_router.post("/gradcam", response_model=GradCAMResponse)
+@xai_router.post("/gradcam", response_model=XAIResponse)
 async def gradcam_explanation(
     file: UploadFile = File(...),
     history_id: Optional[str] = Form(None),
@@ -28,74 +32,51 @@ async def gradcam_explanation(
     result = await explain_image_with_gradcam(file)
 
     overlay_bgr = cv2.cvtColor(result["overlay"], cv2.COLOR_RGB2BGR)
-    explanations = []
-
     if user:
-        if not history_id:
-            raise user_history_not_found_exception
-
-        filename = f"gradcam_{file.filename}_{history_id}"
-        image_id = save_image_to_gridfs(db, overlay_bgr, filename)
-        
-        explanation_item = ExplanationItem(
-            method="gradcam",
-            overlay_image_id=str(image_id)
-        )
-
-        existing = db.explanations.find_one({
-            "history_id": ObjectId(history_id),
-            "explanations.method": "gradcam"
-        })
-        if existing:
-            gradcam_item = next(
-                (e for e in existing["explanations"] if e["method"] == "gradcam"),
-                 None
-            )     
-            if gradcam_item:
-                old_image_id = gradcam_item.get("overlay_image_id")
-                if old_image_id:
-                    try:
-                        db.fs.files.delete_one({"_id": ObjectId(old_image_id)})
-                        db.fs.chunks.delete_many({"files_id": ObjectId(old_image_id)})
-                    except Exception as e:
-                        raise invalid_image_id_exception
-
-            db.explanations.update_one(
-                {"history_id": ObjectId(history_id)},
-                {
-                    "$set": {
-                        "explanations.$[elem].overlay_image_id": image_id
-                    }
-                },
-                array_filters=[{"elem.method": "gradcam"}]
-            )
-        else:
-            db.explanations.update_one(
-                {"history_id": ObjectId(history_id)},
-                {"$push": {"explanations": asdict(explanation_item)}},
-                upsert=True
-            )
-        
-        explanations.append(explanation_item)
+        explanation_item = handle_authenticated_user(db, file, "gradcam", overlay_bgr, history_id)
     else:
-        overlay_base64 = encode_image_to_base64(result["overlay"]) 
-
-        explanation_item = ExplanationItem(
-            method="gradcam",
-            overlay_image_id=overlay_base64
-        )
-        explanations.append(explanation_item)
+        explanation_item = handle_unknown_user("gradcam", overlay_bgr)
 
     explanation_response = Explanation(
         history_id=history_id,
-        explanations=explanations
+        explanations=[explanation_item]
     )
-    return GradCAMResponse(
+    return XAIResponse(
         predicted_class=result["predicted_class"],
         predicted_probs=result["predicted_probs"],
         explanations=[asdict(explanation_response)]
     )
 
+
+@xai_router.post("/lime", response_model=XAIResponse)
+async def lime_explanation(
+    file: UploadFile = File(...),
+    history_id: Optional[str] = Form(None),
+    db: Database = Depends(get_mongo_db),
+    user: Optional[dict] = Depends(get_current_user_optional)
+):
+    result = await explain_image_with_lime(file)
+
+    if result is None:
+        raise invalid_lime_image_exception
+    
+    overlay_bgr = cv2.cvtColor(result["overlay"], cv2.COLOR_RGB2BGR)
+
+    if user:
+        explanation_item = handle_authenticated_user(db, file, "lime", overlay_bgr, history_id)
+    else:
+        explanation_item = handle_unknown_user("lime", overlay_bgr)
+
+    explanation_response = Explanation(
+        history_id=history_id,
+        explanations=[explanation_item]
+    )
+    return XAIResponse(
+        predicted_class=result["predicted_class"],
+        predicted_probs=result["predicted_probs"],
+        explanations=[asdict(explanation_response)]
+    )
+    
 
 @xai_router.get("/images/{image_id}")
 async def get_image(image_id: str, db: Database = Depends(get_mongo_db)):
