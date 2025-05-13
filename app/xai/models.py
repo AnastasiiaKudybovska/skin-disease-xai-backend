@@ -5,6 +5,7 @@ from typing import Optional, List
 class ExplanationItem:
     method: str
     overlay_image_id: Optional[str]  # GridFS або base64
+    heatmap_image_id: Optional[str]
 
 @dataclass
 class Explanation:

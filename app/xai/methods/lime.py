@@ -28,7 +28,8 @@ def generate_lime_for_image(image, model, top_labels=5, num_samples=300): # 1000
 def get_lime_heatmap(explanation, predicted_class_idx):
     dict_heatmap = dict(explanation.local_exp[predicted_class_idx])
     heatmap = np.vectorize(dict_heatmap.get)(explanation.segments) 
-    return heatmap
+    heatmap_norm = (heatmap - heatmap.min()) / (heatmap.max() - heatmap.min() + 1e-8)
+    return heatmap_norm
 
 
 def get_lime_overlay(explanation, predicted_class_idx, num_features=10):

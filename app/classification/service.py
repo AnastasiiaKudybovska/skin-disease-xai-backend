@@ -1,8 +1,9 @@
+import cv2
 from fastapi import UploadFile, HTTPException, status
 from app.classification.schemas import ClassificationResponse, ClassificationWithHistoryResponse
 from app.classification_models.model_loader import model
 from app.constants import CLASS_LABELS, MIN_CONFIDENCE_THRESHOLD
-from app.utils.preprocess_image import load_and_preprocess_image
+from app.utils.preprocess_image import load_and_image, load_and_preprocess_image
 from tensorflow.keras.applications.efficientnet import preprocess_input
 import numpy as np
 from pymongo.database import Database
@@ -10,12 +11,15 @@ from bson import ObjectId
 from datetime import datetime, timezone
 from typing import Optional
 
+from app.utils.saving_images import save_image_to_gridfs
+
 async def classify_image(
     file: UploadFile,
     db: Database,
     user: Optional[dict] = None
 ) -> ClassificationWithHistoryResponse:
-    image_np = load_and_preprocess_image(await file.read())
+    file_data = await file.read() 
+    image_np = load_and_preprocess_image(file_data)
     image_np = np.expand_dims(image_np, axis=0)
     image_np = preprocess_input(image_np)
     
@@ -36,10 +40,16 @@ async def classify_image(
         probabilities=probabilities
         
     )
-    
     history_id = None
+    image_id = None
     if user:
+        filename = f"{file.filename}"
+        image_np = load_and_image(file_data)
+        image_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
+        image_id = save_image_to_gridfs(db, image_bgr, filename)
+
         inserted = db.histories.insert_one({
+            "image_id": image_id,
             "user_id": ObjectId(user["_id"]),
             "predicted_class": result.predicted_class,
             "confidence": result.confidence,
@@ -48,4 +58,4 @@ async def classify_image(
         })
         history_id = str(inserted.inserted_id)
 
-    return ClassificationWithHistoryResponse(**result.model_dump(), history_id=history_id)
+    return ClassificationWithHistoryResponse(**result.model_dump(), history_id=history_id, image_id=image_id)

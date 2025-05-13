@@ -19,3 +19,8 @@ def load_and_preprocess_image(image_bytes: bytes) -> np.ndarray:
     image_np = np.array(image)
     image_np = clean_skin_image(image_np)
     return image_np
+
+def load_and_image(image_bytes: bytes) -> np.ndarray:
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    image_np = np.array(image)
+    return image_np
