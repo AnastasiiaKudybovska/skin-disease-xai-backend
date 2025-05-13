@@ -31,6 +31,7 @@ async def get_user_history(
     return [
         ClassificationHistoryResponse(
             id=str(item["_id"]),
+            image_id=item["image_id"],
             predicted_class=item["predicted_class"],
             confidence=item["confidence"],
             probabilities=item["probabilities"],
