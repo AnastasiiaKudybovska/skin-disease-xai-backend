@@ -1,0 +1,42 @@
+```
+└── 📁skin-disease-backend
+    └── 📁app
+        └── .env
+        └── 📁auth
+            └── dependencies.py
+            └── hashing.py
+            └── models.py
+            └── 📁routes
+                └── auth.py
+                └── user.py
+            └── schemas.py
+            └── service.py
+        └── 📁classification
+            └── models.py
+            └── routes.py
+            └── schemas.py
+            └── service.py
+        └── 📁classification_models
+            └── model_loader.py
+            └── best_model.h5
+        └── config.py
+        └── constants.py
+        └── 📁db
+        └── 📁models
+        └── 📁utils
+        └── 📁xai
+            └── 📁methods
+                └── anchor.py
+                └── gradcam.py
+                └── integrated_gradients.py
+                └── lime.py
+                └── shap.py
+            └── models.py
+            └── routes.py
+            └── schemas.py
+            └── service.py
+    └── 📁venv310
+    └── .gitignore
+    └── main.py
+    └── requirements.txt
+```-=

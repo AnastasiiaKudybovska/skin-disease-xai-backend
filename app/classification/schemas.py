@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 class ClassificationResponse(BaseModel):
     predicted_class: str
@@ -17,3 +17,7 @@ class ClassificationHistoryResponse(BaseModel):
 class ClassificationWithHistoryResponse(ClassificationResponse):
     image_id: Optional[str] = None
     history_id: Optional[str] = None
+
+
+class ClassificationDetailedHistoryResponse(ClassificationHistoryResponse):
+    explanations: List[List]

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, Depends
 from app.classification.service import classify_image
-from app.classification.schemas import ClassificationHistoryResponse, ClassificationWithHistoryResponse
+from app.classification.schemas import ClassificationHistoryResponse, ClassificationWithHistoryResponse, ClassificationDetailedHistoryResponse
 from app.db.mongo import get_mongo_db
 from app.auth.dependencies import get_current_user, get_current_user_optional
 from pymongo.database import Database
@@ -39,6 +39,42 @@ async def get_user_history(
         )
         for item in histories
     ]
+
+
+@classify_router.get("/histories/{history_id}/detail", response_model=ClassificationDetailedHistoryResponse)
+async def get_detailed_history(
+    history_id: str,
+    db: Database = Depends(get_mongo_db),
+    user: dict = Depends(get_current_user)
+):
+    try:
+        object_id = ObjectId(history_id)
+    except Exception:
+        raise invalid_history_id_exception
+    
+    history = db.histories.find_one({
+        "_id": object_id,
+        "user_id": ObjectId(user["_id"])
+    })
+
+    explanation = db.explanations.find_one({
+        "history_id": object_id
+    })
+
+    response_data = {
+        "id": str(history["_id"]),
+        "image_id": history["image_id"],
+        "predicted_class": history["predicted_class"],
+        "confidence": history["confidence"],
+        "probabilities": history["probabilities"],
+        "timestamp": history["timestamp"],
+        "explanations": []
+    }
+
+    if explanation and "explanations" in explanation:
+        response_data["explanations"] = [explanation["explanations"]]
+
+    return ClassificationDetailedHistoryResponse(**response_data)
 
 
 @classify_router.delete("/histories/{history_id}")
